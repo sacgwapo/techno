@@ -18,7 +18,8 @@ const App = () => {
   const [addedItems, setAddedItems] = useState([]);
   const [itemName, setItemName] = useState('');
   const [itemQuantity, setItemQuantity] = useState('');
-  const animatedValue = new Animated.Value(0);
+  const [itemPrice, setItemPrice] = useState('');
+  const [animatedValue] = useState(new Animated.Value(0));
   const [hasPermission, setHasPermission] = useState(null);
   const [scanned, setScanned] = useState(false);
   const [text, setText] = useState('Not yet scanned');
@@ -26,6 +27,7 @@ const App = () => {
   const [notificationText, setNotificationText] = useState('');
   const [isNotificationVisible, setNotificationVisible] = useState(false);
   const [isModalVisible, setModalVisible] = useState(false);
+  const [totalPrice, setTotalPrice] = useState(0);
 
   const toggleModal = () => {
     setModalVisible(!isModalVisible);
@@ -70,10 +72,10 @@ const App = () => {
     setScanned(true);
     setText(data);
 
-    // Add the scanned data as a new item
+    // Add the scanned data as a new item with a default quantity of 1 and price
     setAddedItems((prevItems) => [
       ...prevItems,
-      { name: `Scanned Item - ${data}`, quantity: 1 },
+      { name: `Scanned Item - ${data}`, quantity: 1, price: 5.0 },
     ]);
 
     // Show a notification when a barcode is scanned
@@ -86,17 +88,23 @@ const App = () => {
   };
 
   const handleAddItem = () => {
-    if (itemName.trim() !== '' && itemQuantity.trim() !== '') {
-      setAddedItems((prevItems) => [
-        ...prevItems,
-        { name: itemName, quantity: itemQuantity },
-      ]);
+    if (itemName.trim() !== '' && itemQuantity.trim() !== '' && itemPrice.trim() !== '') {
+      const newItem = {
+        name: itemName,
+        quantity: parseInt(itemQuantity, 10),
+        price: parseFloat(itemPrice),
+      };
+
+      setAddedItems((prevItems) => [...prevItems, newItem]);
 
       // Show a notification when an item is added
-      showNotification(`Product Name: ${itemName} (Quantity: ${itemQuantity})`);
+      showNotification(
+        `Product Name: ${itemName} (Quantity: ${itemQuantity}, Price: ${itemPrice})`
+      );
 
       setItemName('');
       setItemQuantity('');
+      setItemPrice('');
     }
   };
 
@@ -109,42 +117,51 @@ const App = () => {
   const handleDownloadPdf = async (item) => {
     const itemName = item.name;
     const itemQuantity = item.quantity;
-    const pdfContent = generatePdfContent(itemName, itemQuantity);
+    const itemPrice = item.price;
+    const pdfContent = generatePdfContent(itemName, itemQuantity, itemPrice);
 
     try {
       const uri = FileSystem.cacheDirectory + 'downloadedFile.pdf';
       await FileSystem.writeAsStringAsync(uri, pdfContent, { encoding: FileSystem.EncodingType.UTF8 });
-      showNotification(`Downloaded ${itemName} (Quantity: ${itemQuantity})`);
+      showNotification(`Downloaded ${itemName} (Quantity: ${itemQuantity}, Price: ${itemPrice})`);
     } catch (error) {
       console.error('Error downloading file:', error);
       showNotification('Error downloading file');
     }
   };
 
-  const generatePdfContent = (itemName, itemQuantity) => {
+  const generatePdfContent = (itemName, itemQuantity, itemPrice) => {
     // Customize this function to generate the PDF content based on the item data
-    return `Product Name: ${itemName}\nQuantity: ${itemQuantity}\n\nThis is the content of the PDF.`;
+    return `Product Name: ${itemName}\nQuantity: ${itemQuantity}\nPrice: $${itemPrice}\n\nThis is the content of the PDF.`;
   };
 
+  const calculateTotalPrice = () => {
+    const total = addedItems.reduce((acc, item) => acc + item.quantity * item.price, 0);
+    setTotalPrice(total);
+  };
+
+  useEffect(() => {
+    calculateTotalPrice();
+  }, [addedItems]);
+
   return (
-    
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <ImageBackground
         source={require('./123.jpg')}
         style={{ flex: 1, transform: [{ rotate: '0deg' }] }}
       >
-         <View style={styles.notificationContainer}>
-            <TouchableWithoutFeedback onPress={() => showNotification('New Notification')}>
-              <View style={styles.bellContainer}>
-                <Text style={styles.bell}>🔔</Text>
-                {isNotificationVisible && (
-                  <View style={styles.notificationBubble}>
-                    <Text style={styles.notificationBubbleText}>{notificationText}</Text>
-                  </View>
-                )}
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
+        <View style={styles.notificationContainer}>
+          <TouchableWithoutFeedback onPress={() => showNotification('New Notification')}>
+            <View style={styles.bellContainer}>
+              <Text style={styles.bell}>🔔</Text>
+              {isNotificationVisible && (
+                <View style={styles.notificationBubble}>
+                  <Text style={styles.notificationBubbleText}>{notificationText}</Text>
+                </View>
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
         <View style={styles.container}>
           <Button
             title={isScannerVisible ? 'Hide Scanner' : 'Show Scanner'}
@@ -171,8 +188,6 @@ const App = () => {
             </View>
           )}
 
-          
-
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
@@ -187,12 +202,17 @@ const App = () => {
               value={itemQuantity}
               onChangeText={(text) => setItemQuantity(text)}
             />
+            <TextInput
+              style={styles.input}
+              placeholder="Price"
+              keyboardType="numeric"
+              value={itemPrice}
+              onChangeText={(text) => setItemPrice(text)}
+            />
             <View style={styles.buttonContainer}>
               <Button title="Add Item" onPress={handleAddItem} />
             </View>
           </View>
-
-         
 
           <Button title="Show Result" onPress={toggleModal} />
 
@@ -211,7 +231,8 @@ const App = () => {
                   <View key={index} style={styles.modalItemContainer}>
                     <Text style={styles.modalItemText}>
                       Product Name: {item.name}{'\n'}
-                      Quantity: {item.quantity}
+                      Quantity: {item.quantity}{'\n'}
+                      Price: ${item.price.toFixed(2)}
                     </Text>
                     <View style={styles.buttonContainer}>
                       <Button title="Download" onPress={() => handleDownloadPdf(item)} />
@@ -219,15 +240,7 @@ const App = () => {
                     </View>
                   </View>
                 ))}
-                <Text style={styles.graphInfoHeader}>Graph Information:</Text>
-                <View style={styles.graphInfoContainer}>
-                  {addedItems.map((item, index) => (
-                    <View key={index} style={styles.graphInfoItem}>
-                      <Text style={styles.graphInfoItemText}>{item.name}</Text>
-                      <Text style={styles.graphInfoItemText}>{item.quantity}</Text>
-                    </View>
-                  ))}
-                </View>
+                <Text style={styles.modalHeader}>Total Price: ${totalPrice.toFixed(2)}</Text>
                 <Button title="Close" onPress={toggleModal} />
               </ScrollView>
             </View>
@@ -250,16 +263,15 @@ const styles = StyleSheet.create({
   },
   notificationContainer: {
     flexDirection: 'column',
-    alignItems: 'flex-start',
-    marginTop: 10,
-    marginLeft: 10,
+    alignItems: 'flex-end',
+    marginBottom: 20,
   },
   bellContainer: {
     position: 'relative',
   },
   bell: {
     fontSize: 24,
-    marginRight: 100,
+    marginRight: 10,
   },
   notificationBubble: {
     position: 'absolute',
@@ -326,23 +338,7 @@ const styles = StyleSheet.create({
   modalItemText: {
     fontSize: 16,
   },
-  graphInfoHeader: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  graphInfoContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  graphInfoItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  graphInfoItemText: {
-    fontSize: 14,
+  downloadButtonContainer: {
     marginTop: 5,
   },
 });
